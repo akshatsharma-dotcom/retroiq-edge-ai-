@@ -1,0 +1,13 @@
+.env
+.env.*
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+__pycache__/
+node_modules/
+dist/
+*.pyc
+smart_retail_before_demo_seed.db
+.vercel/
+desktop.ini
