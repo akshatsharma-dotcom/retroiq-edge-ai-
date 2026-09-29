@@ -985,26 +985,32 @@ function CustomerTrolley({ products = [] }) {
     }
 
     setPaymentLoading(true);
-    setPaymentMessage?.("Preparing payment...");
+    setShowPaymentSuccess(false);
+    setPaymentSuccessData(null);
+
+    // DEMO QR: no Razorpay API call.
+    // The QR is visual only for the video demo.
+    const demoAmount = Number(total || 200);
+
+    const demoQrUrl =
+      "https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=" +
+      encodeURIComponent(
+        `RETROIQ DEMO PAYMENT | Cart 1 | ₹${demoAmount}`
+      );
+
+    // Show QR panel IMMEDIATELY.
+    setPaymentQR({
+      amount: demoAmount,
+      image_url: demoQrUrl
+    });
 
     try {
-      // Generate the normal QR so the same QR payment panel is shown.
-      const qrData = await api("/payment/create-qr", {
-        method: "POST",
-        body: JSON.stringify({
-          trolley_id: selectedTrolley.id
-        })
-      });
-
-      setPaymentQR(qrData);
-
-      // Keep QR visible for exactly 5 seconds.
-      setPaymentMessage?.("Processing payment...");
+      // EXACT 5 SECOND DEMO WAIT
       await new Promise(resolve =>
         setTimeout(resolve, 5000)
       );
 
-      // DEMO MODE: complete the real backend checkout automatically.
+      // REAL DATABASE CHECKOUT
       const result = await api("/checkout", {
         method: "POST",
         body: JSON.stringify({
@@ -1019,38 +1025,37 @@ function CustomerTrolley({ products = [] }) {
         );
       }
 
-      // Clear local cart.
+      // Clear UI cart
       setCart([]);
 
-      // Update local trolley state.
-      setSelectedTrolley(prev =>
-        prev
-          ? { ...prev, status: "available" }
-          : prev
-      );
-
-      // Show success INSIDE THE SAME QR PAYMENT PANEL.
+      // Store success information
       setPaymentSuccessData({
         amount: Number(
-          result.total_amount || total || 200
+          result.total_amount || demoAmount
         ),
         transactionId:
           result.transaction_id || "Completed"
       });
 
+      // SAME QR PANEL -> SUCCESS SCREEN
       setShowPaymentSuccess(true);
 
-      // Let the success screen remain visible briefly,
-      // then reload dashboard data from backend.
+      // Reload after success screen has been visible.
       setTimeout(() => {
         window.location.reload();
       }, 3000);
 
     } catch (error) {
-      console.error("Demo payment error:", error);
-      alert(
-        error.message || "Payment demo failed"
+      console.error(
+        "Demo payment error:",
+        error
       );
+
+      alert(
+        error.message ||
+        "Payment demo failed"
+      );
+
     } finally {
       setPaymentLoading(false);
     }
