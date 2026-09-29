@@ -974,29 +974,38 @@ function CustomerTrolley({ products = [] }) {
   // ==========================================
 
   const generatePaymentQR = async () => {
-    if (!selectedTrolley || cart.length === 0) {
+    if (!selectedTrolley || cart.length === 0 || paymentLoading) {
       return;
     }
 
     setPaymentLoading(true);
 
     try {
-      const data = await api("/payment/create-qr", {
+      // EXACT 5 SECOND DEMO DELAY
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // REAL BACKEND CHECKOUT
+      const result = await api("/checkout", {
         method: "POST",
         body: JSON.stringify({
-          trolley_id: selectedTrolley.id
+          trolley_id: selectedTrolley.id,
+          payment_status: "paid"
         })
       });
 
-      setPaymentQR(data);
+      if (result?.status !== "success") {
+        throw new Error(
+          result?.message || "Demo checkout failed"
+        );
+      }
+
+      alert("Thank You for Payment");
+
+      window.location.reload();
 
     } catch (error) {
-      console.error("Payment QR error:", error);
-
-      alert(
-        error.message || "Unable to generate payment QR"
-      );
-
+      console.error("Demo payment error:", error);
+      alert(error.message || "Payment failed");
     } finally {
       setPaymentLoading(false);
     }
@@ -1016,8 +1025,15 @@ function CustomerTrolley({ products = [] }) {
 
         setTrolleys(list);
 
+        const demoCart =
+          list.find(
+            t => t.trolley_number === "Cart 1"
+          );
+
         const available =
-          list.find(t => t.status === "available") || list[0];
+          demoCart ||
+          list.find(t => t.status === "available") ||
+          list[0];
 
         if (available) {
           setSelectedTrolley(available);
@@ -2206,7 +2222,7 @@ function CustomerTrolley({ products = [] }) {
               >
 
                 {paymentLoading
-                  ? "Generating QR..."
+                  ? "Processing Payment..."
                   : cart.length === 0
                     ? "Add items to continue"
                     : `PAY ₹${total.toLocaleString("en-IN")}`}
