@@ -8,7 +8,7 @@ import {
 import "./styles.css";
 
 
-const API_BASE = "https://jennifer-analysts-vatican-other.trycloudflare.com";
+const API_BASE = "https://appreciated-stanley-greatly-hiking.trycloudflare.com";
  
 async function api(path, options = {}) { 
   const response = await fetch(`${API_BASE}${path}`, { 
@@ -125,7 +125,7 @@ useEffect(() => {
     try {
 
       const response = await fetch(
-        "http://localhost:8000/health"
+        `${API_BASE}/health`
       );
 
       if (!response.ok) {
@@ -179,7 +179,7 @@ useEffect(() => {
     try {
 
       const response = await fetch(
-        "http://localhost:8000/system-status"
+        `${API_BASE}/system-status`
       );
 
       if (!response.ok) {
@@ -277,7 +277,7 @@ useEffect(() => {
  useEffect(() => {
   const loadProducts = async () => {
     try {
-      const response = await fetch("http://localhost:8000/products");
+      const response = await fetch(`${API_BASE}/products`);
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
@@ -299,7 +299,7 @@ useEffect(() => {
 useEffect(() => {
   const loadTransactions = async () => {
     try {
-      const response = await fetch("http://localhost:8000/transactions");
+      const response = await fetch(`${API_BASE}/transactions`);
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
@@ -339,7 +339,7 @@ useEffect(() => {
 useEffect(() => {
   const loadOrders = async () => {
     try {
-      const response = await fetch("http://localhost:8000/stock-orders");
+      const response = await fetch(`${API_BASE}/stock-orders`);
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
@@ -6255,3 +6255,5 @@ function Modal({title,sub,close,children}){return <div className="overlay"><div 
 function ModalActions({close,label}){return <div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancel</button><button className="primary"><CheckCircle2 size={15}/>{label}</button></div>}
 
 createRoot(document.getElementById("root")).render(<App/>);
+
+
