@@ -8,7 +8,7 @@ import {
 import "./styles.css";
 
 
-const API_BASE = "https://appreciated-stanley-greatly-hiking.trycloudflare.com";
+const API_BASE = "https://explorer-corps-viewpicture-misc.trycloudflare.com";
  
 async function api(path, options = {}) { 
   const response = await fetch(`${API_BASE}${path}`, { 
@@ -6255,5 +6255,6 @@ function Modal({title,sub,close,children}){return <div className="overlay"><div 
 function ModalActions({close,label}){return <div className="modal-actions"><button type="button" className="ghost" onClick={close}>Cancel</button><button className="primary"><CheckCircle2 size={15}/>{label}</button></div>}
 
 createRoot(document.getElementById("root")).render(<App/>);
+
 
 
