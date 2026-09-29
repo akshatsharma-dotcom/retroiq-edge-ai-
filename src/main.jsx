@@ -967,8 +967,6 @@ function CustomerTrolley({ products = [] }) {
 
   const [paymentQR, setPaymentQR] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
-  const [paymentSuccessData, setPaymentSuccessData] = useState(null);
 
 
   // ==========================================
@@ -976,84 +974,27 @@ function CustomerTrolley({ products = [] }) {
   // ==========================================
 
   const generatePaymentQR = async () => {
-    if (
-      !selectedTrolley ||
-      cart.length === 0 ||
-      paymentLoading
-    ) {
+    if (!selectedTrolley || cart.length === 0) {
       return;
     }
 
     setPaymentLoading(true);
-    setShowPaymentSuccess(false);
-    setPaymentSuccessData(null);
-
-    // DEMO QR: no Razorpay API call.
-    // The QR is visual only for the video demo.
-    const demoAmount = Number(total || 200);
-
-    const demoQrUrl =
-      "https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=" +
-      encodeURIComponent(
-        `RETROIQ DEMO PAYMENT | Cart 1 | ₹${demoAmount}`
-      );
-
-    // Show QR panel IMMEDIATELY.
-    setPaymentQR({
-      amount: demoAmount,
-      image_url: demoQrUrl
-    });
 
     try {
-      // EXACT 5 SECOND DEMO WAIT
-      await new Promise(resolve =>
-        setTimeout(resolve, 5000)
-      );
-
-      // REAL DATABASE CHECKOUT
-      const result = await api("/checkout", {
+      const data = await api("/payment/create-qr", {
         method: "POST",
         body: JSON.stringify({
-          trolley_id: selectedTrolley.id,
-          payment_status: "paid"
+          trolley_id: selectedTrolley.id
         })
       });
 
-      if (result?.status !== "success") {
-        throw new Error(
-          result?.message || "Demo checkout failed"
-        );
-      }
-
-      // Clear UI cart
-      setCart([]);
-
-      // Store success information
-      setPaymentSuccessData({
-        amount: Number(
-          result.total_amount || demoAmount
-        ),
-        transactionId:
-          result.transaction_id || "Completed"
-      });
-
-      // SAME QR PANEL -> SUCCESS SCREEN
-      setShowPaymentSuccess(true);
-
-      // Reload after success screen has been visible.
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      setPaymentQR(data);
 
     } catch (error) {
-      console.error(
-        "Demo payment error:",
-        error
-      );
+      console.error("Payment QR error:", error);
 
       alert(
-        error.message ||
-        "Payment demo failed"
+        error.message || "Unable to generate payment QR"
       );
 
     } finally {
@@ -1075,15 +1016,8 @@ function CustomerTrolley({ products = [] }) {
 
         setTrolleys(list);
 
-        const demoCart =
-          list.find(
-            t => t.trolley_number === "Cart 1"
-          );
-
         const available =
-          demoCart ||
-          list.find(t => t.status === "available") ||
-          list[0];
+          list.find(t => t.status === "available") || list[0];
 
         if (available) {
           setSelectedTrolley(available);
@@ -2272,7 +2206,7 @@ function CustomerTrolley({ products = [] }) {
               >
 
                 {paymentLoading
-                  ? "Processing Payment..."
+                  ? "Generating QR..."
                   : cart.length === 0
                     ? "Add items to continue"
                     : `PAY ₹${total.toLocaleString("en-IN")}`}
@@ -2285,162 +2219,90 @@ function CustomerTrolley({ products = [] }) {
               ========================================== */}
 
               {paymentQR && (
+
                 <div
                   style={{
                     marginTop: "18px",
-                    padding: "24px",
+                    padding: "20px",
                     background: "#ffffff",
-                    borderRadius: "20px",
+                    borderRadius: "18px",
                     textAlign: "center",
                     boxShadow:
-                      "0 10px 30px rgba(0,0,0,.16)"
+                      "0 10px 30px rgba(0,0,0,.12)"
                   }}
                 >
-                  {!showPaymentSuccess ? (
-                    <>
-                      <div
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "800",
-                          color: "#0f172a",
-                          marginBottom: "6px"
-                        }}
-                      >
-                        Scan to Pay
-                      </div>
 
-                      <div
-                        style={{
-                          fontSize: "26px",
-                          fontWeight: "900",
-                          color: "#111827",
-                          marginBottom: "16px"
-                        }}
-                      >
-                        ₹{Number(
-                          paymentQR.amount || total || 200
-                        ).toLocaleString("en-IN")}
-                      </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "800",
+                      color: "#0f172a",
+                      marginBottom: "6px"
+                    }}
+                  >
+                    Scan to Pay
+                  </div>
 
-                      <img
-                        src={paymentQR.image_url}
-                        alt="UPI Payment QR"
-                        style={{
-                          width: "320px",
-                          height: "320px",
-                          maxWidth: "100%",
-                          objectFit: "contain",
-                          display: "block",
-                          margin: "0 auto"
-                        }}
-                      />
 
-                      <div
-                        style={{
-                          marginTop: "14px",
-                          fontSize: "12px",
-                          fontWeight: "800",
-                          color: "#6366f1"
-                        }}
-                      >
-                        {paymentLoading
-                          ? "Processing payment..."
-                          : "Waiting for payment..."}
-                      </div>
+                  <div
+                    style={{
+                      fontSize: "24px",
+                      fontWeight: "900",
+                      color: "#111827",
+                      marginBottom: "14px"
+                    }}
+                  >
+                    ₹
+                    {Number(
+                      paymentQR.amount
+                    ).toLocaleString("en-IN")}
+                  </div>
 
-                      <div
-                        style={{
-                          marginTop: "6px",
-                          fontSize: "10px",
-                          color: "#94a3b8"
-                        }}
-                      >
-                        Demo payment verification in progress
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          width: "78px",
-                          height: "78px",
-                          margin: "4px auto 18px",
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          background: "#dcfce7",
-                          color: "#16a34a",
-                          fontSize: "42px",
-                          fontWeight: "900"
-                        }}
-                      >
-                        ✓
-                      </div>
 
-                      <div
-                        style={{
-                          fontSize: "28px",
-                          fontWeight: "900",
-                          color: "#0f172a",
-                          marginBottom: "8px"
-                        }}
-                      >
-                        Thank You for Payment
-                      </div>
+                  <img
+                    src={paymentQR.image_url}
+                    alt="UPI Payment QR"
+                    style={{
+                      width: "320px",
+                      height: "320px",
+                      maxWidth: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                      margin: "0 auto"
+                    }}
+                  />
 
-                      <div
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "700",
-                          color: "#16a34a",
-                          marginBottom: "18px"
-                        }}
-                      >
-                        Transaction Successful
-                      </div>
 
-                      <div
-                        style={{
-                          fontSize: "34px",
-                          fontWeight: "900",
-                          color: "#111827",
-                          marginBottom: "12px"
-                        }}
-                      >
-                        ₹{Number(
-                          paymentSuccessData?.amount || 200
-                        ).toLocaleString("en-IN")}
-                      </div>
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      fontSize: "11px",
+                      color: "#64748b"
+                    }}
+                  >
+                    Scan using any UPI app
+                  </div>
 
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          color: "#94a3b8",
-                          wordBreak: "break-all"
-                        }}
-                      >
-                        Transaction ID:{" "}
-                        {paymentSuccessData?.transactionId ||
-                          "Completed"}
-                      </div>
 
-                      <div
-                        style={{
-                          marginTop: "18px",
-                          padding: "10px 14px",
-                          borderRadius: "10px",
-                          background: "#ecfdf5",
-                          color: "#166534",
-                          fontSize: "11px",
-                          fontWeight: "800"
-                        }}
-                      >
-                        Cart cleared · Stock updated · Store records updated
-                      </div>
-                    </>
-                  )}
+                  <button
+                    onClick={() =>
+                      setPaymentQR(null)
+                    }
+                    style={{
+                      marginTop: "12px",
+                      padding: "8px 14px",
+                      border: "none",
+                      borderRadius: "8px",
+                      background: "#e2e8f0",
+                      color: "#334155",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Close
+                  </button>
+
                 </div>
+
               )}
 
 
@@ -2570,33 +2432,6 @@ function Dashboard({products,low,out,go}){
   // DATE HELPERS
   // -------------------------
 
-  // Backend/SQLite timestamps without timezone are UTC.
-  // Convert them correctly before applying local "Today" filters.
-  const parseApiDate = value => {
-    if (!value) return null;
-
-    const raw = String(value).trim();
-
-    if (!raw) return null;
-
-    const normalized = raw.includes("T")
-      ? raw
-      : raw.replace(" ", "T");
-
-    const hasTimezone =
-      /Z$|[+-]\\d{2}:\\d{2}$/.test(normalized);
-
-    const date = new Date(
-      hasTimezone
-        ? normalized
-        : `${normalized}Z`
-    );
-
-    return Number.isNaN(date.getTime())
-      ? null
-      : date;
-  };
-
   const today=new Date();
 
   const startOfToday=new Date(today);
@@ -2615,20 +2450,18 @@ function Dashboard({products,low,out,go}){
 
   const todayTransactions=transactions.filter(t=>{
 
-    const date = parseApiDate(t.created_at);
+    if(!t.created_at) return false;
 
-    if(!date) return false;
-
-    return date>=startOfToday;
+    return new Date(t.created_at)>=startOfToday;
 
   });
 
 
   const yesterdayTransactions=transactions.filter(t=>{
 
-    const date = parseApiDate(t.created_at);
+    if(!t.created_at) return false;
 
-    if(!date) return false;
+    const date=new Date(t.created_at);
 
     return (
       date>=startOfYesterday &&
@@ -2686,9 +2519,9 @@ function Dashboard({products,low,out,go}){
     const amount=todayTransactions
       .filter(t=>{
 
-        const date=parseApiDate(t.created_at);
+        const date=new Date(t.created_at);
 
-        return date && date.getHours()===hour;
+        return date.getHours()===hour;
 
       })
       .reduce(
