@@ -967,6 +967,8 @@ function CustomerTrolley({ products = [] }) {
 
   const [paymentQR, setPaymentQR] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [paymentSuccessData, setPaymentSuccessData] = useState(null);
 
 
   // ==========================================
@@ -974,14 +976,18 @@ function CustomerTrolley({ products = [] }) {
   // ==========================================
 
   const generatePaymentQR = async () => {
-    if (!selectedTrolley || cart.length === 0 || paymentLoading) {
+    if (
+      !selectedTrolley ||
+      cart.length === 0 ||
+      paymentLoading
+    ) {
       return;
     }
 
     setPaymentLoading(true);
 
     try {
-      // EXACT 5 SECOND DEMO DELAY
+      // EXACT 5 SECOND VIDEO-DEMO DELAY
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // REAL BACKEND CHECKOUT
@@ -999,9 +1005,21 @@ function CustomerTrolley({ products = [] }) {
         );
       }
 
-      alert("Thank You for Payment");
+      // Clear cart in local UI
+      setCart([]);
 
-      window.location.reload();
+      // Show proper Thank You screen instead of browser alert
+      setPaymentSuccessData({
+        amount: Number(result.total_amount || total || 200),
+        transactionId: result.transaction_id || "Completed"
+      });
+
+      setShowPaymentSuccess(true);
+
+      // Give the success screen time to be visible
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
 
     } catch (error) {
       console.error("Demo payment error:", error);
@@ -2234,6 +2252,109 @@ function CustomerTrolley({ products = [] }) {
                   PAYMENT QR
               ========================================== */}
 
+              {showPaymentSuccess && (
+                <div
+                  className="payment-success-overlay"
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 9999,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(2,6,23,.78)",
+                    backdropFilter: "blur(8px)",
+                    padding: "24px"
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "min(430px, 100%)",
+                      padding: "36px 28px",
+                      borderRadius: "28px",
+                      background: "#ffffff",
+                      textAlign: "center",
+                      boxShadow: "0 25px 80px rgba(0,0,0,.35)"
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "76px",
+                        height: "76px",
+                        margin: "0 auto 20px",
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#dcfce7",
+                        color: "#16a34a",
+                        fontSize: "42px",
+                        fontWeight: "900"
+                      }}
+                    >
+                      ✓
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "30px",
+                        fontWeight: "900",
+                        color: "#0f172a",
+                        marginBottom: "8px"
+                      }}
+                    >
+                      Thank You for Payment
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "700",
+                        color: "#64748b",
+                        marginBottom: "18px"
+                      }}
+                    >
+                      Payment successful
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "32px",
+                        fontWeight: "900",
+                        color: "#16a34a",
+                        marginBottom: "12px"
+                      }}
+                    >
+                      ₹{Number(
+                        paymentSuccessData?.amount || 0
+                      ).toLocaleString("en-IN")}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "#94a3b8",
+                        wordBreak: "break-all"
+                      }}
+                    >
+                      Transaction ID: {
+                        paymentSuccessData?.transactionId || "Completed"
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "20px",
+                        fontSize: "11px",
+                        color: "#94a3b8"
+                      }}
+                    >
+                      Updating store records...
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {paymentQR && (
 
                 <div
@@ -2448,6 +2569,33 @@ function Dashboard({products,low,out,go}){
   // DATE HELPERS
   // -------------------------
 
+  // Backend/SQLite timestamps without timezone are UTC.
+  // Convert them correctly before applying local "Today" filters.
+  const parseApiDate = value => {
+    if (!value) return null;
+
+    const raw = String(value).trim();
+
+    if (!raw) return null;
+
+    const normalized = raw.includes("T")
+      ? raw
+      : raw.replace(" ", "T");
+
+    const hasTimezone =
+      /Z$|[+-]\\d{2}:\\d{2}$/.test(normalized);
+
+    const date = new Date(
+      hasTimezone
+        ? normalized
+        : `${normalized}Z`
+    );
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date;
+  };
+
   const today=new Date();
 
   const startOfToday=new Date(today);
@@ -2466,18 +2614,20 @@ function Dashboard({products,low,out,go}){
 
   const todayTransactions=transactions.filter(t=>{
 
-    if(!t.created_at) return false;
+    const date = parseApiDate(t.created_at);
 
-    return new Date(t.created_at)>=startOfToday;
+    if(!date) return false;
+
+    return date>=startOfToday;
 
   });
 
 
   const yesterdayTransactions=transactions.filter(t=>{
 
-    if(!t.created_at) return false;
+    const date = parseApiDate(t.created_at);
 
-    const date=new Date(t.created_at);
+    if(!date) return false;
 
     return (
       date>=startOfYesterday &&
@@ -2535,9 +2685,9 @@ function Dashboard({products,low,out,go}){
     const amount=todayTransactions
       .filter(t=>{
 
-        const date=new Date(t.created_at);
+        const date=parseApiDate(t.created_at);
 
-        return date.getHours()===hour;
+        return date && date.getHours()===hour;
 
       })
       .reduce(
