@@ -1273,14 +1273,13 @@ function CustomerTrolley({ products = [] }) {
 
   const decreaseQty = async (id) => {
 
-    const item =
-      cart.find(item => item.id === id);
+    const item = cart.find(item => item.id === id);
 
     if (!item) return;
 
 
     // ==========================================
-    // QUANTITY 1 → REMOVE ITEM
+    // QUANTITY 1 ? REMOVE ITEM
     // ==========================================
 
     if (item.quantity === 1) {
@@ -1294,18 +1293,90 @@ function CustomerTrolley({ products = [] }) {
           }
         );
 
-        if (result.status !== "removed") {
+        // Even if the item was already removed server-side,
+        // refresh from backend instead of showing a false popup.
+        if (
+          result.status !== "removed" &&
+          result.status !== "not_found"
+        ) {
           throw new Error(
             result.message ||
             "Item could not be removed"
           );
         }
 
-        setCart(current =>
-          current.filter(
-            item => item.id !== id
-          )
-        );
+
+        // Re-read server cart so UI always reflects real DB state.
+        const data = await api("/cart-items");
+
+        const allItems =
+          data.cart_items || data || [];
+
+        const trolleyItems =
+          allItems.filter(
+            x =>
+              x.trolley_id === selectedTrolley.id
+          );
+
+        const refreshedCart =
+          trolleyItems.map(item => ({
+            id: item.id,
+            product_id: item.product_id,
+            name:
+              item.products?.name ||
+              "Unknown Product",
+            price:
+              Number(item.products?.price || 0),
+            quantity:
+              Number(item.quantity || 1),
+            trolley_id:
+              item.trolley_id,
+            expected_weight:
+              Number(item.expected_weight || 0),
+            actual_weight:
+              Number(item.actual_weight || 0),
+            verified:
+              Boolean(item.verified)
+          }));
+
+        setCart(refreshedCart);
+
+
+        // Last item removed ? trolley becomes available.
+        if (refreshedCart.length === 0) {
+
+          await api(
+            `/trolleys/${selectedTrolley.id}`,
+            {
+              method: "PUT",
+              body: JSON.stringify({
+                status: "available"
+              })
+            }
+          );
+
+          setTrolleys(current =>
+            current.map(trolley =>
+              trolley.id === selectedTrolley.id
+                ? {
+                    ...trolley,
+                    status: "available"
+                  }
+                : trolley
+            )
+          );
+
+          setSelectedTrolley(current =>
+            current
+              ? {
+                  ...current,
+                  status: "available"
+                }
+              : current
+          );
+
+          setPaymentQR(null);
+        }
 
       } catch (error) {
 
@@ -2192,8 +2263,9 @@ function CustomerTrolley({ products = [] }) {
                     src={paymentQR.image_url}
                     alt="UPI Payment QR"
                     style={{
-                      width: "220px",
-                      height: "220px",
+                      width: "320px",
+                      height: "320px",
+                      maxWidth: "100%",
                       objectFit: "contain",
                       display: "block",
                       margin: "0 auto"

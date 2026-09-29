@@ -5127,6 +5127,20 @@ def delete_cart_item(cart_item_id: str):
             WHERE id = ?
         """, (cart_item_id,))
 
+        # Make trolley available when its last cart item is removed
+        remaining_items = conn.execute("""
+            SELECT COUNT(*)
+            FROM cart_items
+            WHERE trolley_id = ?
+        """, (cart_item["trolley_id"],)).fetchone()[0]
+
+        if remaining_items == 0:
+            conn.execute("""
+                UPDATE trolleys
+                SET status = 'available'
+                WHERE id = ?
+            """, (cart_item["trolley_id"],))
+
         conn.commit()
 
         return {
@@ -5296,6 +5310,20 @@ def delete_cart_item(cart_item_id: str):
             DELETE FROM cart_items
             WHERE id = ?
         """, (cart_item_id,))
+
+        # Make trolley available when its last cart item is removed
+        remaining_items = conn.execute("""
+            SELECT COUNT(*)
+            FROM cart_items
+            WHERE trolley_id = ?
+        """, (cart_item["trolley_id"],)).fetchone()[0]
+
+        if remaining_items == 0:
+            conn.execute("""
+                UPDATE trolleys
+                SET status = 'available'
+                WHERE id = ?
+            """, (cart_item["trolley_id"],))
 
         conn.commit()
 
