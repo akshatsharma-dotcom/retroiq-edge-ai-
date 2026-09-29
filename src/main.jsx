@@ -985,12 +985,26 @@ function CustomerTrolley({ products = [] }) {
     }
 
     setPaymentLoading(true);
+    setPaymentMessage?.("Preparing payment...");
 
     try {
-      // EXACT 5 SECOND VIDEO-DEMO DELAY
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Generate the normal QR so the same QR payment panel is shown.
+      const qrData = await api("/payment/create-qr", {
+        method: "POST",
+        body: JSON.stringify({
+          trolley_id: selectedTrolley.id
+        })
+      });
 
-      // REAL BACKEND CHECKOUT
+      setPaymentQR(qrData);
+
+      // Keep QR visible for exactly 5 seconds.
+      setPaymentMessage?.("Processing payment...");
+      await new Promise(resolve =>
+        setTimeout(resolve, 5000)
+      );
+
+      // DEMO MODE: complete the real backend checkout automatically.
       const result = await api("/checkout", {
         method: "POST",
         body: JSON.stringify({
@@ -1005,25 +1019,38 @@ function CustomerTrolley({ products = [] }) {
         );
       }
 
-      // Clear cart in local UI
+      // Clear local cart.
       setCart([]);
 
-      // Show proper Thank You screen instead of browser alert
+      // Update local trolley state.
+      setSelectedTrolley(prev =>
+        prev
+          ? { ...prev, status: "available" }
+          : prev
+      );
+
+      // Show success INSIDE THE SAME QR PAYMENT PANEL.
       setPaymentSuccessData({
-        amount: Number(result.total_amount || total || 200),
-        transactionId: result.transaction_id || "Completed"
+        amount: Number(
+          result.total_amount || total || 200
+        ),
+        transactionId:
+          result.transaction_id || "Completed"
       });
 
       setShowPaymentSuccess(true);
 
-      // Give the success screen time to be visible
+      // Let the success screen remain visible briefly,
+      // then reload dashboard data from backend.
       setTimeout(() => {
         window.location.reload();
       }, 3000);
 
     } catch (error) {
       console.error("Demo payment error:", error);
-      alert(error.message || "Payment failed");
+      alert(
+        error.message || "Payment demo failed"
+      );
     } finally {
       setPaymentLoading(false);
     }
@@ -2252,194 +2279,163 @@ function CustomerTrolley({ products = [] }) {
                   PAYMENT QR
               ========================================== */}
 
-              {showPaymentSuccess && (
-                <div
-                  className="payment-success-overlay"
-                  style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: 9999,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(2,6,23,.78)",
-                    backdropFilter: "blur(8px)",
-                    padding: "24px"
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "min(430px, 100%)",
-                      padding: "36px 28px",
-                      borderRadius: "28px",
-                      background: "#ffffff",
-                      textAlign: "center",
-                      boxShadow: "0 25px 80px rgba(0,0,0,.35)"
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "76px",
-                        height: "76px",
-                        margin: "0 auto 20px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: "#dcfce7",
-                        color: "#16a34a",
-                        fontSize: "42px",
-                        fontWeight: "900"
-                      }}
-                    >
-                      ✓
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "30px",
-                        fontWeight: "900",
-                        color: "#0f172a",
-                        marginBottom: "8px"
-                      }}
-                    >
-                      Thank You for Payment
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "700",
-                        color: "#64748b",
-                        marginBottom: "18px"
-                      }}
-                    >
-                      Payment successful
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "32px",
-                        fontWeight: "900",
-                        color: "#16a34a",
-                        marginBottom: "12px"
-                      }}
-                    >
-                      ₹{Number(
-                        paymentSuccessData?.amount || 0
-                      ).toLocaleString("en-IN")}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: "#94a3b8",
-                        wordBreak: "break-all"
-                      }}
-                    >
-                      Transaction ID: {
-                        paymentSuccessData?.transactionId || "Completed"
-                      }
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "20px",
-                        fontSize: "11px",
-                        color: "#94a3b8"
-                      }}
-                    >
-                      Updating store records...
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {paymentQR && (
-
                 <div
                   style={{
                     marginTop: "18px",
-                    padding: "20px",
+                    padding: "24px",
                     background: "#ffffff",
-                    borderRadius: "18px",
+                    borderRadius: "20px",
                     textAlign: "center",
                     boxShadow:
-                      "0 10px 30px rgba(0,0,0,.12)"
+                      "0 10px 30px rgba(0,0,0,.16)"
                   }}
                 >
+                  {!showPaymentSuccess ? (
+                    <>
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "800",
+                          color: "#0f172a",
+                          marginBottom: "6px"
+                        }}
+                      >
+                        Scan to Pay
+                      </div>
 
-                  <div
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "800",
-                      color: "#0f172a",
-                      marginBottom: "6px"
-                    }}
-                  >
-                    Scan to Pay
-                  </div>
+                      <div
+                        style={{
+                          fontSize: "26px",
+                          fontWeight: "900",
+                          color: "#111827",
+                          marginBottom: "16px"
+                        }}
+                      >
+                        ₹{Number(
+                          paymentQR.amount || total || 200
+                        ).toLocaleString("en-IN")}
+                      </div>
 
+                      <img
+                        src={paymentQR.image_url}
+                        alt="UPI Payment QR"
+                        style={{
+                          width: "320px",
+                          height: "320px",
+                          maxWidth: "100%",
+                          objectFit: "contain",
+                          display: "block",
+                          margin: "0 auto"
+                        }}
+                      />
 
-                  <div
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "900",
-                      color: "#111827",
-                      marginBottom: "14px"
-                    }}
-                  >
-                    ₹
-                    {Number(
-                      paymentQR.amount
-                    ).toLocaleString("en-IN")}
-                  </div>
+                      <div
+                        style={{
+                          marginTop: "14px",
+                          fontSize: "12px",
+                          fontWeight: "800",
+                          color: "#6366f1"
+                        }}
+                      >
+                        {paymentLoading
+                          ? "Processing payment..."
+                          : "Waiting for payment..."}
+                      </div>
 
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          fontSize: "10px",
+                          color: "#94a3b8"
+                        }}
+                      >
+                        Demo payment verification in progress
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          width: "78px",
+                          height: "78px",
+                          margin: "4px auto 18px",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "#dcfce7",
+                          color: "#16a34a",
+                          fontSize: "42px",
+                          fontWeight: "900"
+                        }}
+                      >
+                        ✓
+                      </div>
 
-                  <img
-                    src={paymentQR.image_url}
-                    alt="UPI Payment QR"
-                    style={{
-                      width: "320px",
-                      height: "320px",
-                      maxWidth: "100%",
-                      objectFit: "contain",
-                      display: "block",
-                      margin: "0 auto"
-                    }}
-                  />
+                      <div
+                        style={{
+                          fontSize: "28px",
+                          fontWeight: "900",
+                          color: "#0f172a",
+                          marginBottom: "8px"
+                        }}
+                      >
+                        Thank You for Payment
+                      </div>
 
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "700",
+                          color: "#16a34a",
+                          marginBottom: "18px"
+                        }}
+                      >
+                        Transaction Successful
+                      </div>
 
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      fontSize: "11px",
-                      color: "#64748b"
-                    }}
-                  >
-                    Scan using any UPI app
-                  </div>
+                      <div
+                        style={{
+                          fontSize: "34px",
+                          fontWeight: "900",
+                          color: "#111827",
+                          marginBottom: "12px"
+                        }}
+                      >
+                        ₹{Number(
+                          paymentSuccessData?.amount || 200
+                        ).toLocaleString("en-IN")}
+                      </div>
 
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#94a3b8",
+                          wordBreak: "break-all"
+                        }}
+                      >
+                        Transaction ID:{" "}
+                        {paymentSuccessData?.transactionId ||
+                          "Completed"}
+                      </div>
 
-                  <button
-                    onClick={() =>
-                      setPaymentQR(null)
-                    }
-                    style={{
-                      marginTop: "12px",
-                      padding: "8px 14px",
-                      border: "none",
-                      borderRadius: "8px",
-                      background: "#e2e8f0",
-                      color: "#334155",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Close
-                  </button>
-
+                      <div
+                        style={{
+                          marginTop: "18px",
+                          padding: "10px 14px",
+                          borderRadius: "10px",
+                          background: "#ecfdf5",
+                          color: "#166534",
+                          fontSize: "11px",
+                          fontWeight: "800"
+                        }}
+                      >
+                        Cart cleared · Stock updated · Store records updated
+                      </div>
+                    </>
+                  )}
                 </div>
-
               )}
 
 
