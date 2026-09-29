@@ -8,7 +8,7 @@ import {
 import "./styles.css";
 
 
-const API_BASE = "https://listed-concentration-pretty-system.trycloudflare.com";
+const API_BASE = "https://jennifer-analysts-vatican-other.trycloudflare.com";
  
 async function api(path, options = {}) { 
   const response = await fetch(`${API_BASE}${path}`, { 
