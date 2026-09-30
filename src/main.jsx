@@ -1,4 +1,4 @@
-import React,{useMemo,useState,useEffect} from "react";
+import React,{useMemo,useState,useEffect,useRef} from "react";
 import {createRoot} from "react-dom/client";
 import {
   LayoutDashboard,ShoppingCart,Package,Boxes,Truck,ReceiptText,ShieldCheck,
@@ -333,6 +333,8 @@ useEffect(() => {
   };
 
   loadTransactions();
+  const interval = setInterval(loadTransactions, 5000);
+  return () => clearInterval(interval);
 }, []);
  // Load Stock Orders from FastAPI
 
@@ -967,6 +969,132 @@ function CustomerTrolley({ products = [] }) {
 
   const [paymentQR, setPaymentQR] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState("idle");
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const paymentPollRef = useRef(null);
+
+
+  // ==========================================
+  // PAYMENT POLLING HELPERS
+  // ==========================================
+
+  const stopPaymentPolling = () => {
+    if (paymentPollRef.current) {
+      clearInterval(paymentPollRef.current);
+      paymentPollRef.current = null;
+    }
+  };
+
+  const clearPaymentState = () => {
+    stopPaymentPolling();
+    setPaymentQR(null);
+    setPaymentStatus("idle");
+    setPaymentMessage("");
+  };
+
+  useEffect(() => {
+    return () => stopPaymentPolling();
+  }, []);
+
+  const startPaymentPolling = (qrId) => {
+    if (!qrId) return;
+
+    stopPaymentPolling();
+
+    let requestInFlight = false;
+
+    const checkPayment = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+
+      try {
+        const data = await api(
+          `/payment/status/${encodeURIComponent(qrId)}`
+        );
+
+        if (data.status === "paid" && data.checkout_completed) {
+          stopPaymentPolling();
+
+          setPaymentStatus("paid");
+          setPaymentMessage(
+            "Payment successful · Checkout completed"
+          );
+
+          setCart([]);
+
+          // Refresh trolley state after checkout.
+          try {
+            const trolleyData = await api("/trolleys");
+            const list = trolleyData.trolleys || trolleyData || [];
+
+            setTrolleys(Array.isArray(list) ? list : []);
+
+            const updated = Array.isArray(list)
+              ? list.find(t => t.id === selectedTrolley?.id)
+              : null;
+
+            if (updated) {
+              setSelectedTrolley(updated);
+            }
+          } catch (refreshError) {
+            console.error(
+              "Post-payment trolley refresh error:",
+              refreshError
+            );
+          }
+
+          setTimeout(() => {
+            setPaymentQR(null);
+            setPaymentStatus("idle");
+            setPaymentMessage("");
+          }, 2500);
+
+        } else if (data.status === "processing" || data.status === "pending") {
+          setPaymentStatus(data.status);
+          setPaymentMessage(
+            data.message || "Waiting for payment..."
+          );
+
+        } else if (data.status === "failed") {
+          stopPaymentPolling();
+          setPaymentStatus("failed");
+          setPaymentMessage(
+            data.message || "Payment failed. Please try again."
+          );
+
+        } else if (data.status === "payment_received") {
+          stopPaymentPolling();
+          setPaymentStatus("payment_received");
+          setPaymentMessage(
+            data.message ||
+            "Payment received. Checkout needs attention."
+          );
+
+        } else if (data.status === "checkout_failed") {
+          stopPaymentPolling();
+          setPaymentStatus("checkout_failed");
+          setPaymentMessage(
+            data.message || "Payment received but checkout could not be completed."
+          );
+        }
+
+      } catch (error) {
+        console.error("Payment status error:", error);
+        setPaymentStatus("error");
+        setPaymentMessage(
+          "Unable to verify payment status. Retrying..."
+        );
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    checkPayment();
+    paymentPollRef.current = setInterval(
+      checkPayment,
+      2000
+    );
+  };
 
 
   // ==========================================
@@ -979,6 +1107,8 @@ function CustomerTrolley({ products = [] }) {
     }
 
     setPaymentLoading(true);
+    setPaymentStatus("pending");
+    setPaymentMessage("Generating payment QR...");
 
     try {
       const data = await api("/payment/create-qr", {
@@ -989,9 +1119,14 @@ function CustomerTrolley({ products = [] }) {
       });
 
       setPaymentQR(data);
+      setPaymentStatus("pending");
+      setPaymentMessage("Waiting for UPI payment...");
+      startPaymentPolling(data.qr_id);
 
     } catch (error) {
       console.error("Payment QR error:", error);
+
+      clearPaymentState();
 
       alert(
         error.message || "Unable to generate payment QR"
@@ -1091,6 +1226,8 @@ function CustomerTrolley({ products = [] }) {
   // ==========================================
 
   const addToCart = async (product) => {
+    if (paymentQR) clearPaymentState();
+
     if (!selectedTrolley) {
       alert("No trolley available");
       return;
@@ -1214,6 +1351,8 @@ function CustomerTrolley({ products = [] }) {
 
   const increaseQty = async (id) => {
 
+    if (paymentQR) clearPaymentState();
+
     const item =
       cart.find(item => item.id === id);
 
@@ -1272,6 +1411,8 @@ function CustomerTrolley({ products = [] }) {
   // ==========================================
 
   const decreaseQty = async (id) => {
+
+    if (paymentQR) clearPaymentState();
 
     const item = cart.find(item => item.id === id);
 
@@ -2175,7 +2316,8 @@ function CustomerTrolley({ products = [] }) {
               <button
                 disabled={
                   cart.length === 0 ||
-                  paymentLoading
+                  paymentLoading ||
+                  Boolean(paymentQR)
                 }
                 onClick={generatePaymentQR}
                 style={{
@@ -2186,7 +2328,8 @@ function CustomerTrolley({ products = [] }) {
                   borderRadius: "14px",
                   background:
                     cart.length === 0 ||
-                    paymentLoading
+                    paymentLoading ||
+                    Boolean(paymentQR)
                       ? "#334155"
                       : "linear-gradient(135deg,#6366f1,#4f46e5)",
                   color: "#fff",
@@ -2194,12 +2337,14 @@ function CustomerTrolley({ products = [] }) {
                   fontWeight: "800",
                   cursor:
                     cart.length === 0 ||
-                    paymentLoading
+                    paymentLoading ||
+                    Boolean(paymentQR)
                       ? "not-allowed"
                       : "pointer",
                   boxShadow:
                     cart.length === 0 ||
-                    paymentLoading
+                    paymentLoading ||
+                    Boolean(paymentQR)
                       ? "none"
                       : "0 10px 25px rgba(99,102,241,.30)"
                 }}
@@ -2207,9 +2352,11 @@ function CustomerTrolley({ products = [] }) {
 
                 {paymentLoading
                   ? "Generating QR..."
-                  : cart.length === 0
-                    ? "Add items to continue"
-                    : `PAY ₹${total.toLocaleString("en-IN")}`}
+                  : paymentQR
+                    ? "Payment in progress..."
+                    : cart.length === 0
+                      ? "Add items to continue"
+                      : `PAY ₹${total.toLocaleString("en-IN")}`}
 
               </button>
 
@@ -2283,10 +2430,44 @@ function CustomerTrolley({ products = [] }) {
                     Scan using any UPI app
                   </div>
 
+                  {paymentStatus !== "idle" && (
+                    <div
+                      style={{
+                        marginTop: "12px",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        color:
+                          paymentStatus === "paid"
+                            ? "#047857"
+                            : paymentStatus === "failed" ||
+                              paymentStatus === "error" ||
+                              paymentStatus === "checkout_failed"
+                              ? "#b91c1c"
+                              : paymentStatus === "payment_received"
+                                ? "#92400e"
+                                : "#334155",
+                        background:
+                          paymentStatus === "paid"
+                            ? "#d1fae5"
+                            : paymentStatus === "failed" ||
+                              paymentStatus === "error" ||
+                              paymentStatus === "checkout_failed"
+                              ? "#fee2e2"
+                              : paymentStatus === "payment_received"
+                                ? "#fef3c7"
+                                : "#f1f5f9"
+                      }}
+                    >
+                      {paymentMessage}
+                    </div>
+                  )}
+
 
                   <button
                     onClick={() =>
-                      setPaymentQR(null)
+                      clearPaymentState()
                     }
                     style={{
                       marginTop: "12px",
