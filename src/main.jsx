@@ -8,7 +8,7 @@ import {
 import "./styles.css";
 
 
-const API_BASE = "https://dream.tail716452.ts.net";
+const API_BASE = "https://srv1374046.tail716452.ts.net";
  
 async function api(path, options = {}) { 
   const response = await fetch(`${API_BASE}${path}`, { 
